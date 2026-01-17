@@ -2,11 +2,33 @@ import { Link } from "react-router-dom";
 import React from "react";
 import { Header } from "../components/Header";
 import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
 import { Plus, Minus, Trash2, ShoppingBag } from "lucide-react";
 
 export function CartPage() {
   const { items, removeFromCart, updateQuantity, getTotalPrice, clearCart } =
     useCart();
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+            <h2 className="text-2xl font-bold mb-2">Требуется вход</h2>
+            <p className="text-gray-500 mb-6">Войдите, чтобы увидеть корзину</p>
+            <Link
+              to="/auth"
+              className="inline-block bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition"
+            >
+              Перейти к входу
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (

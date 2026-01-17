@@ -1,13 +1,14 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { MapPin, ShoppingCart, HelpCircle, Code, ChevronDown } from "lucide-react";
+import { MapPin, ShoppingCart, HelpCircle, Code, ChevronDown, LogIn, LogOut, User } from "lucide-react";
 import { useCart } from "../context/CartContext";
-import { mockDishes } from "../data/mockDishes";
+import { useAuth } from "../context/AuthContext";
 
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
   const { items } = useCart();
+  const { isAuthenticated, userEmail, logout } = useAuth();
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const isCustomerView = location.pathname === '/customer' || location.pathname === '/';
   const cartItemsCount = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -19,10 +20,6 @@ export function Header() {
     { path: "/order-success", label: "Заказ успешен" },
     { path: "/support", label: "Поддержка" },
     { path: "/restaurant", label: "Панель ресторана" },
-    ...mockDishes.slice(0, 5).map((dish) => ({
-      path: `/dish/${dish.id}`,
-      label: `Блюдо: ${dish.name}`,
-    })),
   ];
 
 
@@ -108,6 +105,33 @@ export function Header() {
                       {cartItemsCount}
                     </span>
                   )}
+                </button>
+              </Link>
+            )}
+
+            {isAuthenticated ? (
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
+                  <User className="w-4 h-4" />
+                  <span>{userEmail || "Пользователь"}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => logout()}
+                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground h-8 rounded-md gap-1.5 px-3"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="hidden sm:inline">Выйти</span>
+                </button>
+              </div>
+            ) : (
+              <Link to="/auth">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground h-8 rounded-md gap-1.5 px-3"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span className="hidden sm:inline">Войти</span>
                 </button>
               </Link>
             )}

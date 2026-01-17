@@ -7,6 +7,8 @@ import { CartPage } from "./pages/CartPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
 import { OrderSuccessPage } from "./pages/OrderSuccessPage";
 import { DishPage } from "./pages/DishPage";
+import { AuthPage } from "./pages/AuthPage";
+import { RestaurantMenuPage } from "./pages/RestaurantMenuPage";
 
 export default function App() {
   return (
@@ -19,6 +21,8 @@ export default function App() {
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/order-success" element={<OrderSuccessPage />} />
         <Route path="/dish/:id" element={<DishPage />} />
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="/restaurant/:id/menu" element={<RestaurantMenuPage />} />
         <Route path="/" element={<Navigate to="/customer" replace />} />
       </Routes>
     </BrowserRouter>

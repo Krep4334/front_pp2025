@@ -1,34 +1,22 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Header } from "../components/Header";
-import { Search, Plus, X } from "lucide-react";
-import { mockDishes } from "../data/mockDishes";
-import { useCart } from "../context/CartContext";
+import { Search, X, Store } from "lucide-react";
+import { useMenuData } from "../hooks/useMenuData";
 
 export function CustomerPage() {
-  const { addToCart } = useCart();
+  const { restaurants, isLoading, error } = useMenuData();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  // Получаем уникальные категории
-  const categories = useMemo(() => {
-    const cats = Array.from(new Set(mockDishes.map((dish) => dish.category)));
-    return cats;
-  }, []);
-
-  // Фильтрация блюд
-  const filteredDishes = useMemo(() => {
-    return mockDishes.filter((dish) => {
-      const matchesSearch =
-        dish.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        dish.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        dish.restaurantName.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesCategory = selectedCategory === null || dish.category === selectedCategory;
-      
-      return matchesSearch && matchesCategory;
+  // Фильтрация ресторанов
+  const filteredRestaurants = useMemo(() => {
+    const search = searchQuery.toLowerCase();
+    return restaurants.filter((restaurant) => {
+      const name = restaurant.name.toLowerCase();
+      const description = (restaurant.description || "").toLowerCase();
+      return name.includes(search) || description.includes(search);
     });
-  }, [searchQuery, selectedCategory]);
+  }, [restaurants, searchQuery]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -69,46 +57,27 @@ export function CustomerPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Категории */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setSelectedCategory(null)}
-              className={`px-4 py-2 rounded-lg font-medium transition ${
-                selectedCategory === null
-                  ? "bg-orange-500 text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-100"
-              }`}
-            >
-              Все блюда
-            </button>
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => setSelectedCategory(category)}
-                className={`px-4 py-2 rounded-lg font-medium transition ${
-                  selectedCategory === category
-                    ? "bg-orange-500 text-white"
-                    : "bg-white text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Результаты поиска */}
-        {filteredDishes.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg">Загрузка меню...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg">
+              Не удалось загрузить данные. Проверьте подключение к API.
+            </p>
+            <p className="text-sm text-gray-400 mt-2">{error}</p>
+          </div>
+        ) : filteredRestaurants.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg">
               Ничего не найдено
             </p>
-            {(searchQuery || selectedCategory) && (
+            {searchQuery && (
               <button
                 onClick={() => {
                   setSearchQuery("");
-                  setSelectedCategory(null);
                 }}
                 className="mt-4 text-orange-500 hover:text-orange-600 text-sm"
               >
@@ -120,58 +89,30 @@ export function CustomerPage() {
           <>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold">
-                {selectedCategory || "Популярные блюда"}
-                {searchQuery && ` (${filteredDishes.length})`}
+                Рестораны
+                {searchQuery && ` (${filteredRestaurants.length})`}
               </h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-stretch">
-              {filteredDishes.map((dish) => (
+              {filteredRestaurants.map((restaurant) => (
                 <Link
-                  key={dish.id}
-                  to={`/dish/${dish.id}`}
+                  key={restaurant.id}
+                  to={`/restaurant/${restaurant.id}/menu`}
                   className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition block flex flex-col h-full"
                 >
-                  <div className="relative">
-                    <img
-                      src={dish.image}
-                      alt={dish.name}
-                      className="w-full h-48 object-cover"
-                      loading="lazy"
-                      onError={(e) => {
-                        // Fallback уже не нужен, используем только placeholder'ы
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                      }}
-                    />
-                  </div>
                   <div className="p-4 flex flex-col flex-grow">
                     <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold text-lg">{dish.name}</h3>
+                      <h3 className="font-semibold text-lg">{restaurant.name}</h3>
+                      <Store className="w-5 h-5 text-orange-500" />
                     </div>
-                    <p className="text-sm text-gray-500 mb-2">{dish.restaurantName}</p>
-                    <div className="flex items-center justify-between mt-auto">
-                      <span className="text-orange-500 font-bold text-lg">
-                        {dish.price} ₽
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          addToCart({
-                            id: dish.id,
-                            name: dish.name,
-                            price: dish.price,
-                            image: dish.image,
-                            restaurantId: dish.restaurantId,
-                            restaurantName: dish.restaurantName,
-                          });
-                        }}
-                        className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition flex items-center gap-2 shrink-0"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Добавить
-                      </button>
+                    <p className="text-sm text-gray-500 mb-4">
+                      {restaurant.description || "Описание не указано"}
+                    </p>
+                    <div className="text-sm text-gray-500 space-y-1 mt-auto">
+                      <div>Доставка: {restaurant.deliveryTime}</div>
+                      <div>Мин. заказ: {restaurant.minOrder} ₽</div>
+                      <div>Стоимость доставки: {restaurant.deliveryFee} ₽</div>
                     </div>
                   </div>
                 </Link>

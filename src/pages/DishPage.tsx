@@ -1,17 +1,58 @@
+import React from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Header } from "../components/Header";
 import { useCart } from "../context/CartContext";
-import { mockDishes, Dish } from "../data/mockDishes";
+import { useAuth } from "../context/AuthContext";
 import { Plus, Minus, ArrowLeft, Utensils } from "lucide-react";
 import { useState } from "react";
+import { useMenuData } from "../hooks/useMenuData";
 
 export function DishPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { isAuthenticated } = useAuth();
+  const { dishes, isLoading, error } = useMenuData();
   const [quantity, setQuantity] = useState(1);
 
-  const dish = mockDishes.find((d) => d.id === id);
+  const dish = dishes.find((d) => d.id === id);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+            <h2 className="text-2xl font-bold mb-2">Загрузка блюда...</h2>
+            <p className="text-gray-500">Пожалуйста, подождите</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+            <h2 className="text-2xl font-bold mb-2">Ошибка загрузки</h2>
+            <p className="text-gray-500 mb-4">
+              Не удалось получить данные о блюде. Проверьте настройки API.
+            </p>
+            <p className="text-sm text-gray-400">{error}</p>
+            <Link
+              to="/customer"
+              className="inline-block bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition mt-6"
+            >
+              Вернуться к меню
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!dish) {
     return (
@@ -34,7 +75,7 @@ export function DishPage() {
   }
 
   // Похожие блюда (из той же категории или ресторана, исключая текущее)
-  const similarDishes = mockDishes
+  const similarDishes = dishes
     .filter(
       (d) =>
         d.id !== dish.id &&
@@ -43,6 +84,10 @@ export function DishPage() {
     .slice(0, 4);
 
   const handleAddToCart = () => {
+    if (!isAuthenticated) {
+      navigate("/auth");
+      return;
+    }
     for (let i = 0; i < quantity; i++) {
       addToCart({
         id: dish.id,

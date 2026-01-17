@@ -34,7 +34,18 @@ cd food
 npm install
 ```
 
-### 4. Запустите dev сервер
+### 4. Настройте API (IP/порт)
+Скопируйте шаблон окружения и укажите адрес/порты бэкенда:
+```bash
+cp env.example .env
+```
+Пример для домена `kurmashevdr-yandex-team.ru`:
+```
+VITE_API_PROTOCOL=https
+VITE_API_HOST=kurmashevdr-yandex-team.ru
+```
+
+### 5. Запустите dev сервер
 ```bash
 npm run dev
 ```
