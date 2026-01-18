@@ -111,10 +111,15 @@ export function Header() {
 
             {isAuthenticated ? (
               <div className="flex items-center gap-2">
-                <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
-                  <User className="w-4 h-4" />
-                  <span>{userEmail || "Пользователь"}</span>
-                </div>
+                <Link to="/profile">
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground h-8 rounded-md gap-1.5 px-3"
+                  >
+                    <User className="w-4 h-4" />
+                    <span className="hidden sm:inline">Профиль</span>
+                  </button>
+                </Link>
                 <button
                   type="button"
                   onClick={() => logout()}

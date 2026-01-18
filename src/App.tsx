@@ -9,6 +9,9 @@ import { OrderSuccessPage } from "./pages/OrderSuccessPage";
 import { DishPage } from "./pages/DishPage";
 import { AuthPage } from "./pages/AuthPage";
 import { RestaurantMenuPage } from "./pages/RestaurantMenuPage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { ActiveOrdersPage } from "./pages/ActiveOrdersPage";
+import { ArchivedOrdersPage } from "./pages/ArchivedOrdersPage";
 
 export default function App() {
   return (
@@ -23,6 +26,9 @@ export default function App() {
         <Route path="/dish/:id" element={<DishPage />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/restaurant/:id/menu" element={<RestaurantMenuPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/profile/orders/active" element={<ActiveOrdersPage />} />
+        <Route path="/profile/orders/archived" element={<ArchivedOrdersPage />} />
         <Route path="/" element={<Navigate to="/customer" replace />} />
       </Routes>
     </BrowserRouter>
