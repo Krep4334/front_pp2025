@@ -69,19 +69,19 @@ export function CheckoutPage() {
         accessToken
       );
 
-      const order = addOrder({
+    const order = addOrder({
         id: String(checkoutResult.id),
         status: mapStatusFromApi(checkoutResult.status) as any,
-        restaurantId,
-        restaurantName,
-        items: items,
+      restaurantId,
+      restaurantName,
+      items: items,
         total: checkoutResult.total_amount,
-        customer: formData,
-      });
+      customer: formData,
+    });
 
-      console.log("Заказ оформлен:", order);
+    console.log("Заказ оформлен:", order);
       await clearCart({ skipServer: true });
-      navigate("/order-success", { state: { orderId: order.id } });
+    navigate("/order-success", { state: { orderId: order.id } });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка оформления заказа");
     } finally {

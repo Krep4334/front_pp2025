@@ -54,3 +54,47 @@ export const createAddress = (payload: AddressInput, accessToken: string) =>
 export const getAddresses = (accessToken: string) =>
   apiFetch<AddressOut[]>(`${apiConfig.user}/users/me/addresses`, undefined, accessToken);
 
+export interface RoleAssignment {
+  role: string;
+  restaurant_id?: number | null;
+}
+
+export interface UserAdminOut {
+  id: number;
+  email: string;
+  phone?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  role: string;
+  restaurant_id?: number | null;
+  is_active: boolean;
+}
+
+export const getAdminUsers = (accessToken: string, limit = 100, offset = 0) =>
+  apiFetch<UserAdminOut[]>(
+    `${apiConfig.user}/admin/users?limit=${limit}&offset=${offset}`,
+    undefined,
+    accessToken
+  );
+
+export const assignUserRole = (
+  userId: number,
+  payload: RoleAssignment,
+  accessToken: string
+) =>
+  apiFetch<UserAdminOut>(
+    `${apiConfig.user}/admin/users/${userId}/role`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    accessToken
+  );
+
+export const revokeUserRole = (userId: number, accessToken: string) =>
+  apiFetch<UserAdminOut>(
+    `${apiConfig.user}/admin/users/${userId}/role`,
+    { method: "DELETE" },
+    accessToken
+  );
+

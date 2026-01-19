@@ -1,12 +1,50 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Header } from "../components/Header";
 import { Search, X, Store } from "lucide-react";
 import { useMenuData } from "../hooks/useMenuData";
+import { getCategories } from "../api/restaurant";
 
 export function CustomerPage() {
   const { restaurants, isLoading, error } = useMenuData();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoriesByRestaurant, setCategoriesByRestaurant] = useState<
+    Record<string, string[]>
+  >({});
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (restaurants.length === 0) return;
+    let isMounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const entries = await Promise.all(
+          restaurants.map(async (restaurant) => {
+            const categories = await getCategories(Number(restaurant.id));
+            return [
+              restaurant.id,
+              categories.map((category) => category.name),
+            ] as const;
+          })
+        );
+        if (!isMounted) return;
+        setCategoriesByRestaurant(Object.fromEntries(entries));
+      } catch (err) {
+        if (!isMounted) return;
+        setCategoriesError(
+          err instanceof Error ? err.message : "Не удалось загрузить категории"
+        );
+      }
+    };
+
+    loadCategories();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [restaurants]);
 
   // Фильтрация ресторанов
   const filteredRestaurants = useMemo(() => {
@@ -14,9 +52,17 @@ export function CustomerPage() {
     return restaurants.filter((restaurant) => {
       const name = restaurant.name.toLowerCase();
       const description = (restaurant.description || "").toLowerCase();
-      return name.includes(search) || description.includes(search);
+      const matchesSearch = name.includes(search) || description.includes(search);
+      if (!selectedCategory) return matchesSearch;
+      const categories = categoriesByRestaurant[restaurant.id] || [];
+      return matchesSearch && categories.includes(selectedCategory);
     });
-  }, [restaurants, searchQuery]);
+  }, [restaurants, searchQuery, selectedCategory, categoriesByRestaurant]);
+
+  const availableCategories = useMemo(() => {
+    const all = Object.values(categoriesByRestaurant).flat();
+    return Array.from(new Set(all)).sort((a, b) => a.localeCompare(b));
+  }, [categoriesByRestaurant]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -57,6 +103,38 @@ export function CustomerPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {availableCategories.length > 0 && (
+          <div className="mb-6">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSelectedCategory(null)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  selectedCategory === null
+                    ? "bg-orange-500 text-white"
+                    : "bg-white text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                Все категории
+              </button>
+              {availableCategories.map((category) => (
+                <button
+                  key={category}
+                  onClick={() => setSelectedCategory(category)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                    selectedCategory === category
+                      ? "bg-orange-500 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+            {categoriesError && (
+              <p className="text-sm text-gray-400 mt-2">{categoriesError}</p>
+            )}
+          </div>
+        )}
         {/* Результаты поиска */}
         {isLoading ? (
           <div className="text-center py-12">
@@ -68,16 +146,17 @@ export function CustomerPage() {
               Не удалось загрузить данные. Проверьте подключение к API.
             </p>
             <p className="text-sm text-gray-400 mt-2">{error}</p>
-          </div>
+        </div>
         ) : filteredRestaurants.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg">
               Ничего не найдено
             </p>
-            {searchQuery && (
+            {(searchQuery || selectedCategory) && (
               <button
                 onClick={() => {
                   setSearchQuery("");
+                  setSelectedCategory(null);
                 }}
                 className="mt-4 text-orange-500 hover:text-orange-600 text-sm"
               >
@@ -109,6 +188,18 @@ export function CustomerPage() {
                     <p className="text-sm text-gray-500 mb-4">
                       {restaurant.description || "Описание не указано"}
                     </p>
+                    {categoriesByRestaurant[restaurant.id]?.length ? (
+                      <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-4">
+                        {categoriesByRestaurant[restaurant.id].map((category) => (
+                          <span
+                            key={`${restaurant.id}-${category}`}
+                            className="bg-gray-100 px-2 py-1 rounded-full"
+                          >
+                            {category}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                     <div className="text-sm text-gray-500 space-y-1 mt-auto">
                       <div>Доставка: {restaurant.deliveryTime}</div>
                       <div>Мин. заказ: {restaurant.minOrder} ₽</div>

@@ -4,13 +4,13 @@ import { Header } from "../components/Header";
 import { useMenuData } from "../hooks/useMenuData";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Minus, Plus } from "lucide-react";
 
 export function RestaurantMenuPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { restaurants, dishes, isLoading, error } = useMenuData();
-  const { addToCart } = useCart();
+  const { addToCart, updateQuantity, items } = useCart();
   const { isAuthenticated } = useAuth();
 
   const restaurant = useMemo(
@@ -113,28 +113,73 @@ export function RestaurantMenuPage() {
                     <span className="text-orange-500 font-bold text-lg">
                       {dish.price} ₽
                     </span>
-                    <button
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        if (!isAuthenticated) {
-                          navigate("/auth");
-                          return;
-                        }
-                        addToCart({
-                          id: dish.id,
-                          name: dish.name,
-                          price: dish.price,
-                          image: dish.image,
-                          restaurantId: dish.restaurantId,
-                          restaurantName: dish.restaurantName,
-                        });
-                      }}
-                      className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition flex items-center gap-2 shrink-0"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Добавить
-                    </button>
+                    {(() => {
+                      const currentItem = items.find((item) => item.id === dish.id);
+                      const quantity = currentItem?.quantity || 0;
+
+                      if (quantity === 0) {
+                        return (
+                          <button
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              if (!isAuthenticated) {
+                                navigate("/auth");
+                                return;
+                              }
+                              addToCart({
+                                id: dish.id,
+                                name: dish.name,
+                                price: dish.price,
+                                image: dish.image,
+                                restaurantId: dish.restaurantId,
+                                restaurantName: dish.restaurantName,
+                              });
+                            }}
+                            className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition flex items-center gap-2 shrink-0 active:scale-95"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Добавить
+                          </button>
+                        );
+                      }
+
+                      return (
+                        <div className="flex items-center gap-2 bg-orange-50 rounded-lg px-2 py-1">
+                          <button
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              if (!isAuthenticated) {
+                                navigate("/auth");
+                                return;
+                              }
+                              updateQuantity(dish.id, quantity - 1);
+                            }}
+                            className="w-8 h-8 flex items-center justify-center rounded-md bg-white text-black border border-gray-200 shadow-sm hover:bg-gray-50 transition active:scale-95"
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <span className="min-w-[24px] text-center font-semibold text-black">
+                            {quantity}
+                          </span>
+                          <button
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              if (!isAuthenticated) {
+                                navigate("/auth");
+                                return;
+                              }
+                              updateQuantity(dish.id, quantity + 1);
+                            }}
+                            className="w-8 h-8 flex items-center justify-center rounded-md bg-black text-white shadow-sm hover:bg-gray-900 transition active:scale-95"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </Link>

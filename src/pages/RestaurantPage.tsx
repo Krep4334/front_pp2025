@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Header } from "../components/Header";
-import { useOrders } from "../context/OrdersContext";
+import { useAuth } from "../context/AuthContext";
 import { useMenuData } from "../hooks/useMenuData";
 import { getPlaceholderImage } from "../utils/imagePlaceholders";
 import {
@@ -10,17 +11,20 @@ import {
   deleteDish,
   getCategories,
   getDishes,
+  getRestaurantOrders,
+  getRestaurantStats,
+  RestaurantOrderOut,
+  RestaurantStats,
   updateCategory,
   updateDish,
 } from "../api/restaurant";
+import { updateOrderStatus as updateOrderStatusApi } from "../api/order";
 import {
   TrendingUp,
   ShoppingBag,
   Users,
   DollarSign,
-  Clock,
   Star,
-  Plus,
   Edit,
   Trash2,
   BarChart3,
@@ -28,14 +32,21 @@ import {
 } from "lucide-react";
 
 export function RestaurantPage() {
+  const navigate = useNavigate();
+  const { accessToken, role } = useAuth();
   const { restaurants, dishes, isLoading, error, reload } = useMenuData();
   const [selectedRestaurant, setSelectedRestaurant] =
     useState<typeof restaurants[number] | null>(null);
   const [activeTab, setActiveTab] = useState<"stats" | "menu" | "orders">("stats");
-  const { getOrdersByRestaurant, updateOrderStatus } = useOrders();
   const [categories, setCategories] = useState<
     { id: number; name: string; display_order: number }[]
   >([]);
+  const [restaurantOrders, setRestaurantOrders] = useState<RestaurantOrderOut[]>([]);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [isOrdersLoading, setIsOrdersLoading] = useState(false);
+  const [statsData, setStatsData] = useState<RestaurantStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
   const [managedDishes, setManagedDishes] = useState(dishes);
   const [menuError, setMenuError] = useState<string | null>(null);
   const [isMenuLoading, setIsMenuLoading] = useState(false);
@@ -126,26 +137,65 @@ export function RestaurantPage() {
     };
   }, [selectedRestaurant]);
 
+  useEffect(() => {
+    if (!selectedRestaurant || !accessToken) {
+      setStatsData(null);
+      setRestaurantOrders([]);
+      return;
+    }
+    let isMounted = true;
+
+    const loadStatsAndOrders = async () => {
+      setIsStatsLoading(true);
+      setIsOrdersLoading(true);
+      setStatsError(null);
+      setOrdersError(null);
+      try {
+        const [statsResponse, ordersResponse] = await Promise.all([
+          getRestaurantStats(Number(selectedRestaurant.id), accessToken),
+          getRestaurantOrders(Number(selectedRestaurant.id), accessToken),
+        ]);
+        if (!isMounted) return;
+        setStatsData(statsResponse);
+        // Фильтруем только активные заказы (не delivered и не cancelled)
+        const activeOrders = ordersResponse.filter(
+          (order) => order.status !== "delivered" && order.status !== "cancelled"
+        );
+        setRestaurantOrders(activeOrders);
+      } catch (err) {
+        if (!isMounted) return;
+        const message =
+          err instanceof Error ? err.message : "Ошибка загрузки данных ресторана";
+        setStatsError(message);
+        setOrdersError(message);
+      } finally {
+        if (isMounted) {
+          setIsStatsLoading(false);
+          setIsOrdersLoading(false);
+        }
+      }
+    };
+
+    loadStatsAndOrders();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedRestaurant, accessToken]);
+
   // Статистика для выбранного ресторана
   const restaurantDishes = selectedRestaurant
     ? managedDishes.filter((dish) => dish.restaurantId === selectedRestaurant.id)
     : [];
 
-  // Получаем реальные заказы для выбранного ресторана
-  const restaurantOrders = useMemo(() => {
-    if (!selectedRestaurant) return [];
-    return getOrdersByRestaurant(selectedRestaurant.id);
-  }, [selectedRestaurant, getOrdersByRestaurant]);
-
-  // Мок статистика
   const stats = {
-    totalOrders: 1247,
-    todayOrders: 23,
-    totalRevenue: 1250000,
-    todayRevenue: 45000,
-    averageOrder: 3500,
+    totalOrders: statsData?.total_orders ?? 0,
+    todayOrders: statsData?.today_orders ?? 0,
+    totalRevenue: statsData?.total_revenue ?? 0,
+    todayRevenue: statsData?.today_revenue ?? 0,
+    averageOrder: statsData?.average_check ?? 0,
     rating: selectedRestaurant?.rating ?? null,
-    activeCustomers: 342,
+    activeCustomers: statsData?.monthly_active_customers ?? 0,
     popularDishes: restaurantDishes.slice(0, 3),
   };
 
@@ -154,12 +204,18 @@ export function RestaurantPage() {
     switch (status) {
       case "pending":
         return "bg-yellow-100 text-yellow-800";
+      case "confirmed":
+        return "bg-orange-100 text-orange-800";
       case "preparing":
         return "bg-blue-100 text-blue-800";
       case "ready":
         return "bg-green-100 text-green-800";
       case "delivering":
         return "bg-purple-100 text-purple-800";
+      case "delivered":
+        return "bg-gray-100 text-gray-800";
+      case "cancelled":
+        return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -169,14 +225,78 @@ export function RestaurantPage() {
     switch (status) {
       case "pending":
         return "Ожидает";
+      case "confirmed":
+        return "Подтвержден";
       case "preparing":
         return "Готовится";
       case "ready":
         return "Готов";
       case "delivering":
         return "Доставляется";
+      case "delivered":
+        return "Доставлен";
+      case "cancelled":
+        return "Отменен";
       default:
         return status;
+    }
+  };
+
+  const hasRestaurantRole =
+    role === "admin" || role === "restaurant_admin" || role === "restaurant_staff";
+
+  const ensureAuth = () => {
+    if (!accessToken) {
+      navigate("/auth");
+      return false;
+    }
+    return true;
+  };
+
+  const ensureRestaurantRole = () => {
+    if (!ensureAuth()) return false;
+    if (!hasRestaurantRole) {
+      setMenuError("Нужна роль ресторана для изменения меню и заказов.");
+      setOrdersError("Нужна роль ресторана для изменения статусов.");
+      return false;
+    }
+    return true;
+  };
+
+  const handleOrderStatusChange = async (orderId: number, status: string) => {
+    if (!ensureRestaurantRole()) return;
+    try {
+      await updateOrderStatusApi(orderId, status, accessToken!);
+      // Перезагружаем заказы и статистику после изменения статуса
+      if (selectedRestaurant) {
+        try {
+          const [freshOrders, freshStats] = await Promise.all([
+            getRestaurantOrders(Number(selectedRestaurant.id), accessToken!),
+            getRestaurantStats(Number(selectedRestaurant.id), accessToken!),
+          ]);
+          // Фильтруем только активные заказы (не delivered и не cancelled)
+          const activeOrders = freshOrders.filter(
+            (order) => order.status !== "delivered" && order.status !== "cancelled"
+          );
+          setRestaurantOrders(activeOrders);
+          setStatsData(freshStats);
+        } catch {
+          // Игнорируем ошибки обновления, но обновляем локально
+          if (status === "delivered" || status === "cancelled") {
+            setRestaurantOrders((prev) => prev.filter((order) => order.id !== orderId));
+          } else {
+            setRestaurantOrders((prev) =>
+              prev.map((order) =>
+                order.id === orderId ? { ...order, status } : order
+              )
+            );
+          }
+        }
+      }
+    } catch (err) {
+      setOrdersError(
+        err instanceof Error ? err.message : "Не удалось обновить статус заказа"
+      );
     }
   };
 
@@ -293,6 +413,17 @@ export function RestaurantPage() {
         {/* Контент табов */}
         {activeTab === "stats" && (
           <div className="space-y-6">
+            {!accessToken && (
+              <div className="text-sm text-gray-500">
+                Войдите как администратор/сотрудник ресторана, чтобы видеть статистику.
+              </div>
+            )}
+            {statsError && (
+              <div className="text-sm text-red-500">{statsError}</div>
+            )}
+            {isStatsLoading && (
+              <div className="text-sm text-gray-500">Загрузка статистики...</div>
+            )}
             {/* Карточки статистики */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white rounded-lg shadow-sm p-6">
@@ -338,33 +469,7 @@ export function RestaurantPage() {
               </div>
             </div>
 
-            {/* Популярные блюда */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-xl font-bold mb-4">Популярные блюда</h2>
-              <div className="space-y-3">
-                {stats.popularDishes.map((dish, index) => (
-                  <div
-                    key={dish.id}
-                    className="flex items-center justify-between p-3 border rounded-lg"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center font-bold">
-                        {index + 1}
-                      </span>
-                      <div>
-                        <p className="font-medium">{dish.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {Math.floor(Math.random() * 200 + 50)} заказов
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-orange-500 font-semibold">
-                      {dish.price} ₽
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Популярные блюда убраны по требованию */}
           </div>
         )}
 
@@ -372,23 +477,6 @@ export function RestaurantPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-bold">Меню ресторана</h2>
-              <button
-                className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition flex items-center gap-2"
-                onClick={() =>
-                  setDishForm({
-                    name: "",
-                    description: "",
-                    price: "",
-                    image_url: "",
-                    category_id: "",
-                    is_available: true,
-                    is_recommended: false,
-                  })
-                }
-              >
-                <Plus className="w-4 h-4" />
-                Добавить блюдо
-              </button>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm p-4 space-y-4">
@@ -412,7 +500,8 @@ export function RestaurantPage() {
                     <button
                       className="text-red-600 hover:text-red-800"
                       onClick={async () => {
-                        await deleteCategory(category.id);
+                    if (!ensureRestaurantRole()) return;
+                        await deleteCategory(category.id, accessToken!);
                         if (selectedRestaurant) {
                           await reload();
                           const fresh = await getCategories(Number(selectedRestaurant.id));
@@ -442,16 +531,17 @@ export function RestaurantPage() {
                   className="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm"
                   onClick={async () => {
                     if (!selectedRestaurant || !categoryName.trim()) return;
+                    if (!ensureRestaurantRole()) return;
                     if (editingCategoryId) {
                       await updateCategory(editingCategoryId, {
                         name: categoryName.trim(),
-                      });
+                      }, accessToken!);
                     } else {
                       await createCategory({
                         restaurant_id: Number(selectedRestaurant.id),
                         name: categoryName.trim(),
                         display_order: categories.length,
-                      });
+                      }, accessToken!);
                     }
                     setCategoryName("");
                     setEditingCategoryId(null);
@@ -555,31 +645,39 @@ export function RestaurantPage() {
                   className="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm"
                   onClick={async () => {
                     if (!selectedRestaurant) return;
+                    if (!ensureRestaurantRole()) return;
                     const price = Number(dishForm.price);
                     if (!dishForm.name.trim() || Number.isNaN(price)) return;
 
                     if (dishForm.id) {
                       await updateDish(dishForm.id, {
+                        category_id: dishForm.category_id
+                          ? Number(dishForm.category_id)
+                          : null,
                         name: dishForm.name.trim(),
                         description: dishForm.description.trim() || null,
                         price,
+                        weight: undefined,
+                        calories: undefined,
                         image_url: dishForm.image_url.trim() || null,
                         is_available: dishForm.is_available,
                         is_recommended: dishForm.is_recommended,
-                      });
+                      }, accessToken!);
                     } else {
                       await createDish({
                         restaurant_id: Number(selectedRestaurant.id),
                         name: dishForm.name.trim(),
                         description: dishForm.description.trim() || null,
                         price,
+                        weight: undefined,
+                        calories: undefined,
                         image_url: dishForm.image_url.trim() || null,
                         category_id: dishForm.category_id
                           ? Number(dishForm.category_id)
                           : null,
                         is_available: dishForm.is_available,
                         is_recommended: dishForm.is_recommended,
-                      });
+                      }, accessToken!);
                     }
 
                     setDishForm({
@@ -709,7 +807,8 @@ export function RestaurantPage() {
                         <button
                           className="p-2 text-red-600 hover:bg-red-50 rounded"
                           onClick={async () => {
-                            await deleteDish(Number(dish.id));
+                        if (!ensureRestaurantRole()) return;
+                            await deleteDish(Number(dish.id), accessToken!);
                             if (selectedRestaurant) {
                               const freshDishes = await getDishes(
                                 Number(selectedRestaurant.id)
@@ -761,7 +860,22 @@ export function RestaurantPage() {
         {activeTab === "orders" && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold">Активные заказы</h2>
-            {restaurantOrders.length === 0 ? (
+            {!accessToken && (
+              <div className="text-sm text-gray-500">
+                Войдите как администратор/сотрудник ресторана, чтобы видеть заказы.
+              </div>
+            )}
+            {ordersError && (
+              <div className="text-sm text-red-500">{ordersError}</div>
+            )}
+            {isOrdersLoading && (
+              <div className="text-sm text-gray-500">Загрузка заказов...</div>
+            )}
+            {!accessToken ? (
+              <div className="text-center py-12 bg-white rounded-lg shadow-sm">
+                <p className="text-gray-500">Войдите, чтобы видеть заказы</p>
+              </div>
+            ) : restaurantOrders.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-lg shadow-sm">
                 <p className="text-gray-500">Нет активных заказов</p>
                 <p className="text-sm text-gray-400 mt-2">
@@ -772,9 +886,9 @@ export function RestaurantPage() {
               <div className="space-y-3">
                 {restaurantOrders.map((order) => {
                   // Форматируем данные заказа
-                  const orderItems = order.items.map((item) => item.name);
-                  const customerName = order.customer.name;
-                  const orderAddress = order.customer.address;
+                  const orderItems = order.items.map(
+                    (item) => `${item.dish_name} × ${item.quantity}`
+                  );
 
                   return (
                     <div
@@ -794,54 +908,78 @@ export function RestaurantPage() {
                             </span>
                           </div>
                           <p className="text-sm text-gray-600">
-                            <span className="font-medium">{customerName}</span> • {order.time}
+                            Клиент #{order.customer_id}
                           </p>
                         </div>
                         <span className="text-lg font-bold text-orange-500">
-                          {order.total} ₽
+                          {order.total_amount} ₽
                         </span>
                       </div>
                       <div className="mb-3">
                         <p className="text-sm text-gray-500 mb-1">Блюда:</p>
-                        <p className="text-sm">{Array.isArray(orderItems) ? orderItems.join(", ") : orderItems}</p>
+                        <p className="text-sm">
+                          {Array.isArray(orderItems) ? orderItems.join(", ") : orderItems}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <span>{orderAddress}</span>
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        {order.status === "pending" && (
-                          <button
-                            onClick={() => updateOrderStatus(order.id, "preparing")}
-                            className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
-                          >
-                            Начать готовить
-                          </button>
-                        )}
-                        {order.status === "preparing" && (
-                          <button
-                            onClick={() => updateOrderStatus(order.id, "ready")}
-                            className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-                          >
-                            Готово
-                          </button>
-                        )}
-                        {order.status === "ready" && (
-                          <button
-                            onClick={() => updateOrderStatus(order.id, "delivering")}
-                            className="px-3 py-1 bg-purple-500 text-white rounded text-sm hover:bg-purple-600"
-                          >
-                            Передать курьеру
-                          </button>
-                        )}
-                        {order.status === "delivering" && (
-                          <button
-                            onClick={() => updateOrderStatus(order.id, "completed")}
-                            className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
-                          >
-                            Завершить
-                          </button>
-                        )}
-                      </div>
+                      {accessToken && (
+                        <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
+                          {order.status === "pending" && (
+                            <button
+                              onClick={() => handleOrderStatusChange(order.id, "confirmed")}
+                              className="px-4 py-2 bg-orange-500 rounded-lg text-sm font-medium hover:bg-orange-600 transition shadow-sm"
+                              style={{ color: '#ffffff', backgroundColor: '#f97316' }}
+                            >
+                              Подтвердить
+                            </button>
+                          )}
+                          {order.status === "confirmed" && (
+                            <button
+                              onClick={() => handleOrderStatusChange(order.id, "preparing")}
+                              className="px-4 py-2 bg-blue-500 rounded-lg text-sm font-medium hover:bg-blue-600 transition shadow-sm"
+                              style={{ color: '#ffffff', backgroundColor: '#3b82f6' }}
+                            >
+                              Начать готовить
+                            </button>
+                          )}
+                          {order.status === "preparing" && (
+                            <button
+                              onClick={() => handleOrderStatusChange(order.id, "ready")}
+                              className="px-4 py-2 bg-green-500 rounded-lg text-sm font-medium hover:bg-green-600 transition shadow-sm"
+                              style={{ color: '#ffffff', backgroundColor: '#22c55e' }}
+                            >
+                              Готово
+                            </button>
+                          )}
+                          {order.status === "ready" && (
+                            <button
+                              onClick={() => handleOrderStatusChange(order.id, "delivering")}
+                              className="px-4 py-2 bg-purple-500 rounded-lg text-sm font-medium hover:bg-purple-600 transition shadow-sm"
+                              style={{ color: '#ffffff', backgroundColor: '#a855f7' }}
+                            >
+                              В доставке
+                            </button>
+                          )}
+                          {order.status === "delivering" && (
+                            <button
+                              onClick={() => handleOrderStatusChange(order.id, "delivered")}
+                              className="px-4 py-2 bg-green-600 rounded-lg text-sm font-medium hover:bg-green-700 transition shadow-sm"
+                              style={{ color: '#ffffff', backgroundColor: '#16a34a' }}
+                            >
+                              Доставлено
+                            </button>
+                          )}
+                          {order.status !== "delivered" &&
+                            order.status !== "cancelled" && (
+                              <button
+                                onClick={() => handleOrderStatusChange(order.id, "cancelled")}
+                                className="px-4 py-2 bg-red-500 rounded-lg text-sm font-medium hover:bg-red-600 transition shadow-sm"
+                                style={{ color: '#ffffff', backgroundColor: '#ef4444' }}
+                              >
+                                Отменить
+                              </button>
+                            )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

@@ -7,11 +7,11 @@ import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
   <AuthProvider>
-    <CartProvider>
-      <OrdersProvider>
-        <App />
-      </OrdersProvider>
-    </CartProvider>
+  <CartProvider>
+    <OrdersProvider>
+      <App />
+    </OrdersProvider>
+  </CartProvider>
   </AuthProvider>
 );
   

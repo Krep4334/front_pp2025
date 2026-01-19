@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { MapPin, ShoppingCart, HelpCircle, Code, ChevronDown, LogIn, LogOut, User } from "lucide-react";
+import { ShoppingCart, HelpCircle, Code, ChevronDown, LogIn, LogOut, User } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 
@@ -36,14 +36,6 @@ export function Header() {
               <h1 className="font-bold text-xl">FoodExpress</h1>
             </div>
           </Link>
-
-          {/* Location (for customer view) */}
-          {isCustomerView && (
-            <div className="hidden md:flex items-center space-x-2 text-gray-600">
-              <MapPin className="w-5 h-5" />
-              <span>Москва, Тверская улица, 1</span>
-            </div>
-          )}
 
           {/* Navigation */}
           <div className="flex items-center space-x-4">

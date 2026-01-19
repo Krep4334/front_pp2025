@@ -2,21 +2,23 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Header } from "../components/Header";
 import { useAuth } from "../context/AuthContext";
-import { getUserOrders, OrderOut } from "../api/order";
-import { History, Package, MapPin, ArrowLeft, Loader2 } from "lucide-react";
+import { getUserOrders, OrderDetailOut } from "../api/order";
+import { History, Package, ArrowLeft, Loader2 } from "lucide-react";
 
 const statusLabels: Record<string, string> = {
-  pending: "Ожидает обработки",
-  preparing: "Готовится",
-  ready: "Готов к выдаче",
-  delivering: "Доставляется",
-  completed: "Завершен",
+  pending: "В процессе",
+  confirmed: "В процессе",
+  preparing: "В процессе",
+  ready: "В процессе",
+  delivering: "В процессе",
+  completed: "Выполнен",
+  delivered: "Выполнен",
   cancelled: "Отменен",
-  delivered: "Доставлен",
 };
 
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
+  confirmed: "bg-orange-100 text-orange-800",
   preparing: "bg-blue-100 text-blue-800",
   ready: "bg-green-100 text-green-800",
   delivering: "bg-purple-100 text-purple-800",
@@ -28,7 +30,7 @@ const statusColors: Record<string, string> = {
 export function ArchivedOrdersPage() {
   const navigate = useNavigate();
   const { isAuthenticated, accessToken } = useAuth();
-  const [orders, setOrders] = useState<OrderOut[]>([]);
+  const [orders, setOrders] = useState<OrderDetailOut[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,10 +47,13 @@ export function ArchivedOrdersPage() {
         // Получаем архивные заказы (завершенные или отмененные)
         const allOrders = await getUserOrders(accessToken);
         const archivedOrders = allOrders.filter(
-          (order) => order.status === "completed" || order.status === "cancelled" || order.status === "delivered"
+          (order) =>
+            order.status === "completed" ||
+            order.status === "cancelled" ||
+            order.status === "delivered"
         );
-        // Сортируем по дате создания (новые сначала)
-        archivedOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        // Сортируем по id (новые сначала)
+        archivedOrders.sort((a, b) => b.id - a.id);
         setOrders(archivedOrders);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Не удалось загрузить заказы");
@@ -63,17 +68,6 @@ export function ArchivedOrdersPage() {
   if (!isAuthenticated) {
     return null;
   }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("ru-RU", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
 
   if (isLoading) {
     return (
@@ -145,10 +139,7 @@ export function ArchivedOrdersPage() {
                       </span>
                     </div>
                     <p className="text-sm text-gray-500">
-                      {order.restaurant_name}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {formatDate(order.created_at)}
+                      Ресторан #{order.restaurant_id}
                     </p>
                   </div>
                   <div className="text-right">
@@ -158,29 +149,19 @@ export function ArchivedOrdersPage() {
                   </div>
                 </div>
 
-                {order.delivery_address && (
-                  <div className="flex items-start gap-2 mb-4 text-sm text-gray-600">
-                    <MapPin className="w-4 h-4 mt-0.5" />
-                    <div>
-                      <p>{order.delivery_address.street_address}</p>
-                      <p>{order.delivery_address.city}</p>
-                    </div>
-                  </div>
-                )}
-
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium mb-2">Состав заказа:</h4>
                   <div className="space-y-2">
                     {order.items.map((item) => (
                       <div
-                        key={item.id}
+                        key={item.dish_id}
                         className="flex justify-between text-sm"
                       >
                         <span>
                           {item.dish_name} × {item.quantity}
                         </span>
                         <span className="font-medium">
-                          {item.price * item.quantity} ₽
+                          {item.dish_price * item.quantity} ₽
                         </span>
                       </div>
                     ))}

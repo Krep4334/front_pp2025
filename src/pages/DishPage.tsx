@@ -4,18 +4,18 @@ import { Header } from "../components/Header";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { Plus, Minus, ArrowLeft, Utensils } from "lucide-react";
-import { useState } from "react";
 import { useMenuData } from "../hooks/useMenuData";
 
 export function DishPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { addToCart } = useCart();
+  const { addToCart, items, updateQuantity } = useCart();
   const { isAuthenticated } = useAuth();
   const { dishes, isLoading, error } = useMenuData();
-  const [quantity, setQuantity] = useState(1);
 
   const dish = dishes.find((d) => d.id === id);
+  const cartItem = dish ? items.find((item) => item.id === dish.id) : null;
+  const quantity = cartItem?.quantity || 0;
 
   if (isLoading) {
     return (
@@ -88,17 +88,15 @@ export function DishPage() {
       navigate("/auth");
       return;
     }
-    for (let i = 0; i < quantity; i++) {
-      addToCart({
-        id: dish.id,
-        name: dish.name,
-        price: dish.price,
-        image: dish.image,
-        restaurantId: dish.restaurantId,
-        restaurantName: dish.restaurantName,
-      });
-    }
-    navigate("/cart");
+    if (!dish) return;
+    addToCart({
+      id: dish.id,
+      name: dish.name,
+      price: dish.price,
+      image: dish.image,
+      restaurantId: dish.restaurantId,
+      restaurantName: dish.restaurantName,
+    });
   };
 
   return (
@@ -144,35 +142,18 @@ export function DishPage() {
               </p>
             </div>
 
-            {/* Состав */}
-            <div className="mb-6">
-              <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
-                <Utensils className="w-5 h-5" />
-                Состав
-              </h3>
-              <ul className="space-y-2 text-gray-600">
-                {dish.ingredients?.map((ingredient, index) => (
-                  <li key={index} className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                    {ingredient}
-                  </li>
-                )) || (
-                  <li className="text-gray-400">Состав не указан</li>
-                )}
-              </ul>
-            </div>
-
-            {/* Характеристики */}
-            <div className="mb-6 grid grid-cols-2 gap-4">
-              <div className="p-3">
-                <p className="text-sm text-gray-500 mb-1">Вес</p>
-                <p className="font-semibold">{dish.weight || "350"} г</p>
+            {/* Описание */}
+            {dish.description && (
+              <div className="mb-6">
+                <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
+                  <Utensils className="w-5 h-5" />
+                  Описание
+                </h3>
+                <p className="text-gray-600 leading-relaxed">
+                  {dish.description}
+                </p>
               </div>
-              <div className="p-3">
-                <p className="text-sm text-gray-500 mb-1">Калории</p>
-                <p className="font-semibold">{dish.calories || "450"} ккал</p>
-              </div>
-            </div>
+            )}
 
             {/* Цена и добавление в корзину */}
             <div className="border-t pt-6">
@@ -182,31 +163,47 @@ export function DishPage() {
                 </span>
               </div>
               <div className="mb-4">
-                <button
-                  onClick={handleAddToCart}
-                  style={{ paddingLeft: '2.5rem', paddingRight: '3rem', paddingTop: '1rem', paddingBottom: '1rem', width: 'fit-content' }}
-                  className="bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold inline-flex items-center justify-center gap-2 shadow-md text-lg"
-                >
-                  <Plus className="w-6 h-6" />
-                  Добавить в корзину
-                </button>
-              </div>
-              <div className="flex items-center justify-start gap-2">
-                <button
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-4 h-6 flex items-center justify-center rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition shadow-sm"
-                >
-                  <Minus className="w-3 h-3" />
-                </button>
-                <span className="w-10 text-center font-semibold text-lg">
-                  {quantity}
-                </span>
-                <button
-                  onClick={() => setQuantity(quantity + 1)}
-                  className="w-4 h-6 flex items-center justify-center rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition shadow-sm"
-                >
-                  <Plus className="w-3 h-3" />
-                </button>
+                {quantity === 0 ? (
+                  <button
+                    onClick={handleAddToCart}
+                    className="bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 transition font-semibold inline-flex items-center justify-center gap-2 shadow-md text-lg"
+                  >
+                    <Plus className="w-6 h-6" />
+                    Добавить в корзину
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 bg-orange-50 rounded-lg px-3 py-2 inline-flex">
+                    <button
+                      onClick={() => {
+                        if (!isAuthenticated) {
+                          navigate("/auth");
+                          return;
+                        }
+                        if (!dish) return;
+                        updateQuantity(dish.id, quantity - 1);
+                      }}
+                      className="w-8 h-8 flex items-center justify-center rounded-md bg-white text-black border border-gray-200 shadow-sm hover:bg-gray-50 transition active:scale-95"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className="min-w-[24px] text-center font-semibold text-black">
+                      {quantity}
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (!isAuthenticated) {
+                          navigate("/auth");
+                          return;
+                        }
+                        if (!dish) return;
+                        updateQuantity(dish.id, quantity + 1);
+                      }}
+                      className="w-8 h-8 flex items-center justify-center rounded-md bg-black text-white shadow-sm hover:bg-gray-900 transition active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

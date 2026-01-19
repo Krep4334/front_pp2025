@@ -27,6 +27,8 @@ interface DishOut {
   name: string;
   description?: string | null;
   price: number;
+  weight?: number | null;
+  calories?: number | null;
   image_url?: string | null;
   is_available: boolean;
   is_recommended: boolean;
@@ -69,6 +71,8 @@ const toUiDish = (
   name: dish.name,
   description: dish.description || undefined,
   price: Number(dish.price),
+  weight: dish.weight ?? undefined,
+  calories: dish.calories ?? undefined,
   image: dish.image_url || getPlaceholderImage(categoryName, index + 1),
   restaurantId: String(dish.restaurant_id),
   restaurantName,
